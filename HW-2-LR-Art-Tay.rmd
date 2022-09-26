@@ -1,0 +1,39 @@
+---
+title: "Linear Regression"
+author: "Art Tay"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+##Setup code
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+
+# Libraries
+library(tidyverse)
+```
+
+## Gradient Derivation
+a)
+\begin{align*}
+\dfrac{\partial}{\partial \beta_0}\frac{1}{2m}
+\left[\sum_{i = 0}^{m} (\beta_0 + \beta_1 y^{(i)} - y^{(i)})^2\right] &= \\
+\end{align*}
+
+b)
+\begin{align*}
+\dfrac{\partial}{\partial \beta_1}\frac{1}{2m}
+\left[\sum_{i = 0}^{m} (\beta_0 + \beta_1 y^{(i)} - y^{(i)})^2\right] &= \\
+\end{align*}
+
+## Linear Regression by Gradient Decent
+```{r Problem Statement 2, include = F}
+# Linear regression by gradient descent in R
+# The purpose of this exercise is to test what is above and implement that in R.
+# Steps:
+# a) Generate some random data for X and Y (use rnorm function in R)
+# b) Check linearity by running lm(y~x) and get the coefficient
+# c) Build Cost and gradient descent function
+# d) The output of betas (𝛽0  + 𝛽1) should be equal to the coefficients above
+```
+
+## Linear Model on Airbnb Data
