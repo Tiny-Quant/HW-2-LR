@@ -15,14 +15,67 @@ library(tidyverse)
 ## Gradient Derivation
 a)
 \begin{align*}
-\dfrac{\partial}{\partial \beta_0}\frac{1}{2m}
-\left[\sum_{i = 0}^{m} (\beta_0 + \beta_1 y^{(i)} - y^{(i)})^2\right] &= \\
+\dfrac{\partial}{\partial \beta_0}
+\left[
+\frac{1}{2m} \sum_{i = 0}^{m}
+(\beta_0 + \beta_1 x^{(i)} - y^{(i)})^2
+\right]
+&=
+\dfrac{\partial}{\partial \beta_0}
+\left[
+\frac{1}{2m} \sum_{i = 0}^{m}
+(\beta_0 + \beta_1 x^{(i)} - y^{(i)})^2
+\right]
+\\
+&=
+\frac{1}{2m} \sum_{i = 0}^{m}
+\left[
+2(\beta_0 + \beta_1 x^{(i)} - y^{(i)}) \cdot 1
+\right]
+\\
+&=
+\frac{1}{m} \sum_{i = 0}^{m} \beta_0 +
+\beta_1 \frac{1}{m} \sum_{i = 0}^{m} x^{(i)} -
+\frac{1}{m} \sum_{i = 0}^{m} y^{(i)}
+\\
+&=
+\beta_0 + \beta_1 \bar x - \bar y
 \end{align*}
-
 b)
 \begin{align*}
-\dfrac{\partial}{\partial \beta_1}\frac{1}{2m}
-\left[\sum_{i = 0}^{m} (\beta_0 + \beta_1 y^{(i)} - y^{(i)})^2\right] &= \\
+\dfrac{\partial}{\partial \beta_1}
+\left[
+\frac{1}{2m} \sum_{i = 0}^{m}
+(\beta_0 + \beta_1 x^{(i)} - y^{(i)})^2
+\right]
+&=
+\frac{1}{2m} \sum_{i = 0}^{m}
+\dfrac{\partial}{\partial \beta_1}
+\left[
+(\beta_0 + \beta_1 x^{(i)} - y^{(i)})^2
+\right]
+\\
+&=
+\frac{1}{2m} \sum_{i = 0}^{m}
+\left[
+2 x^{(i)}(\beta_0 + \beta_1 x^{(i)} - y^{(i)})
+\right]
+\\
+&=
+\frac{1}{m} \sum_{i = 0}^{m}
+\left[
+\beta_0 x^{(i)}+ \beta_1 {x^{(i)}}^2 - x^{(i)}y^{(i)}
+\right]
+\\
+&=
+\beta_0 \frac{1}{m} \sum_{i = 0}^{m} x^{(i)} +
+\beta_1 \frac{1}{m} \sum_{i = 0}^{m}  {x^{(i)}}^2 -
+\frac{1}{m} \sum_{i = 0}^{m} x^{(i)}y^{(i)}
+\\
+&=
+\beta_0 \bar x +
+\beta_1 \bar{x^2} -
+\bar {xy}
 \end{align*}
 
 ## Linear Regression by Gradient Decent
@@ -35,5 +88,119 @@ b)
 # c) Build Cost and gradient descent function
 # d) The output of betas (𝛽0  + 𝛽1) should be equal to the coefficients above
 ```
+
+```{r}
+# Generates linear data with normal residuals
+set.seed(123)
+x <- rnorm(n = 30)
+
+epsilon <- rnorm(n = 30)
+
+y <- 5*x + 1 + epsilon
+
+plot(x,y)
+```
+
+```{r}
+ols_cost <- function(x, y, beta_0, beta_1){
+    cost <- (y - (beta_1 * x + beta_0))^2
+    return(sum(cost))
+}
+```
+
+```{r}
+slr_gradient_desc <- function(x, y, alpha){
+
+    # Summary statistic calculations.
+    # Helps to calculate the gradient faster.
+    x_bar <- mean(x)
+    y_bar <- mean(y)
+    xy_bar <- mean(x*y)
+    x_sqbar <- mean(x^2)
+
+    # initial guess for beta_0 and beta_1
+    beta_0 <- y_bar
+    beta_1 <- 0
+
+    cost_0 <- ols_cost(x, y, beta_0, beta_1)
+
+    # Dataframe to store results.
+    df_results <- data.frame(beta_0 = c(beta_0),
+                            beta_1 = c(beta_1),
+                            error = c(cost_0))
+
+    # A counter to determine is the error is unchanging.
+    count_same <- 0
+
+    while(count_same < 10){
+
+        # Cost prior to beta adjustment.
+        cost_start <- ols_cost(x, y, beta_0, beta_1)
+
+        #print(cost_start)
+
+        print(c(beta_0, beta_1))
+
+        # Calculate gradient values.
+        g_0 <- beta_0 + (beta_1 * x_bar) - y_bar
+        g_1 <- (beta_0 * x_bar) + (beta_1 * x_sqbar) - xy_bar
+
+        # Update betas.
+        beta_0 <- beta_0 + (alpha * g_0)
+        beta_1 <- beta_1 + (alpha * g_1)
+
+        # Calculate new cost.
+        cost_after <- ols_cost(x, y, beta_0, beta_1)
+
+        #print(cost_after)
+
+        print(c(beta_0, beta_1))
+
+        # Check cost relation.
+        #if(cost_start < cost_after) {
+            #return("Bad alpha, over shot minimum! Lower alpha and try again")
+        if(cost_start == cost_after) {
+            df_results <- cbind(df_results,
+                                c(beta_0, beta_1, cost_after))
+            count_same <- count_same + 1
+        } else {
+            df_results <- cbind(df_results,
+                                c(beta_0, beta_1, cost_after))
+        }
+    }
+    return(df_results)
+}
+```
+
+## Test
+```{r}
+slr_gradient_desc(x, y, alpha = 0.01)
+```
+
+```{r}
+beta_0 <- y_bar
+beta_1 <- 0
+
+for(i in 10000){
+    # Summary statistic calculations.
+    # Helps to calculate the gradient faster.
+    x_bar <- mean(x)
+    y_bar <- mean(y)
+    xy_bar <- mean(x*y)
+    x_sqbar <- mean(x^2)
+
+    # initial guess for beta_0 and beta_1
+
+    g_0 <- beta_0 + (beta_1 * x_bar) - y_bar
+    g_1 <- (beta_0 * x_bar) + (beta_1 * x_sqbar) + xy_bar
+
+    # Update betas.
+    beta_0 <- beta_0 + (0.1 * g_0)
+    beta_1 <- beta_1 + (0.1 * g_1)
+
+    print(c(beta_0, beta_1, ols_cost(x, y, beta_0, beta_1)))
+}
+```
+
 
 ## Linear Model on Airbnb Data
