@@ -125,9 +125,9 @@ slr_gradient_desc <- function(x, y, alpha){
     cost_0 <- ols_cost(x, y, beta_0, beta_1)
 
     # Dataframe to store results.
-    df_results <- data.frame(beta_0 = c(beta_0),
-                            beta_1 = c(beta_1),
-                            error = c(cost_0))
+    df_results <- c(beta_0 = beta_0,
+                    beta_1 = beta_1,
+                    error = cost_0)
 
     # A counter to determine is the error is unchanging.
     count_same <- 0
@@ -139,32 +139,32 @@ slr_gradient_desc <- function(x, y, alpha){
 
         #print(cost_start)
 
-        print(c(beta_0, beta_1))
+        #print(c(beta_0, beta_1))
 
         # Calculate gradient values.
         g_0 <- beta_0 + (beta_1 * x_bar) - y_bar
         g_1 <- (beta_0 * x_bar) + (beta_1 * x_sqbar) - xy_bar
 
         # Update betas.
-        beta_0 <- beta_0 + (alpha * g_0)
-        beta_1 <- beta_1 + (alpha * g_1)
+        beta_0 <- beta_0 - (alpha * g_0)
+        beta_1 <- beta_1 - (alpha * g_1)
 
         # Calculate new cost.
         cost_after <- ols_cost(x, y, beta_0, beta_1)
 
         #print(cost_after)
 
-        print(c(beta_0, beta_1))
+        #print(c(beta_0, beta_1))
 
         # Check cost relation.
         #if(cost_start < cost_after) {
             #return("Bad alpha, over shot minimum! Lower alpha and try again")
         if(cost_start == cost_after) {
-            df_results <- cbind(df_results,
+            df_results <- rbind(df_results,
                                 c(beta_0, beta_1, cost_after))
             count_same <- count_same + 1
         } else {
-            df_results <- cbind(df_results,
+            df_results <- rbind(df_results,
                                 c(beta_0, beta_1, cost_after))
         }
     }
@@ -174,33 +174,67 @@ slr_gradient_desc <- function(x, y, alpha){
 
 ## Test
 ```{r}
-slr_gradient_desc(x, y, alpha = 0.01)
+test_1 <- slr_gradient_desc(x, y, alpha = 0.01)
+```
+
+```{r, include = F}
+#beta_0 <- y_bar
+#beta_1 <- 0
+#beta_1s <- c()
+
+#for(i in 1:1000){
+    ## Summary statistic calculations.
+    ## Helps to calculate the gradient faster.
+    #x_bar <- mean(x)
+    #y_bar <- mean(y)
+    #xy_bar <- mean(x*y)
+    #x_sqbar <- mean(x^2)
+
+    ## initial guess for beta_0 and beta_1
+
+    #g_0 <- beta_0 + (beta_1 * x_bar) - y_bar
+    #g_1 <- (beta_0 * x_bar) + (beta_1 * x_sqbar) - xy_bar
+
+    ## Update betas.
+    #beta_0 <- beta_0 - (0.01 * g_0)
+    #beta_1 <- beta_1 - (0.01 * g_1)
+
+    #beta_1s <- append(beta_1s, beta_1)
+#}
 ```
 
 ```{r}
-beta_0 <- y_bar
-beta_1 <- 0
+# gradient testing
 
-for(i in 10000){
-    # Summary statistic calculations.
-    # Helps to calculate the gradient faster.
-    x_bar <- mean(x)
-    y_bar <- mean(y)
-    xy_bar <- mean(x*y)
-    x_sqbar <- mean(x^2)
+# Summary statistic calculations.
+x_bar <- mean(x)
+y_bar <- mean(y)
+xy_bar <- mean(x*y)
+x_sqbar <- mean(x^2)
 
-    # initial guess for beta_0 and beta_1
+# Betas to plot
+beta_0s <- seq(from = -10, to = 10, by = .1)
+beta_1s <- seq(from = -10, to = 10, by = .1)
 
-    g_0 <- beta_0 + (beta_1 * x_bar) - y_bar
-    g_1 <- (beta_0 * x_bar) + (beta_1 * x_sqbar) + xy_bar
+g_0 <- beta_0s + (beta_1s * x_bar) - y_bar
+g_1 <- (beta_0s * x_bar) + (beta_1s * x_sqbar) - xy_bar
 
-    # Update betas.
-    beta_0 <- beta_0 + (0.1 * g_0)
-    beta_1 <- beta_1 + (0.1 * g_1)
-
-    print(c(beta_0, beta_1, ols_cost(x, y, beta_0, beta_1)))
-}
+par(mfrow = c(1,2))
+plot(beta_0s, g_0)
+abline(h = 0, v = 1)
+plot(beta_1s, g_1)
+abline(h = 0, v = 5)
 ```
 
+```{r}
+costs <- c()
+
+for(i in seq(from = 1, to = length(beta_0s))){
+    costs <- append(costs, ols_cost(x, y, beta_0s[i], beta_1s[i]))
+}
+
+plot(beta_1s, costs)
+abline(h = min(costs), v = 5)
+```
 
 ## Linear Model on Airbnb Data
