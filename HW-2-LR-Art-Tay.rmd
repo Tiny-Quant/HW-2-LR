@@ -89,7 +89,7 @@ b)
 # d) The output of betas (𝛽0  + 𝛽1) should be equal to the coefficients above
 ```
 
-```{r}
+```{r a) Random Data Generation}
 # Generates linear data with normal residuals
 set.seed(123)
 x <- rnorm(n = 30)
@@ -97,18 +97,101 @@ x <- rnorm(n = 30)
 epsilon <- rnorm(n = 30)
 
 y <- 5*x + 1 + epsilon
-
-plot(x,y)
 ```
 
-```{r}
+```{r Plots generated data, include = F}
+plot(x, y)
+```
+
+```{r b) Checks linearity and coefficients use lm}
+summary(lm(y ~ x))
+```
+
+```{r c) Defines a function for calculating cost function}
+# Calculates the mean squared error for a simple linear regression model.
+# @param x - a vector of the explainatory variable.
+# @param y - a vector of the response variable.
+# @param beta_0 - the intercept value for the current SLR model.
+# @param beta_1 - the slope value for the current SLR model.
+# @return - sum total mean squared error (y_hat - y)^2
+slr_mse <- function(x, y, beta_0, beta_1){
+    cost <- ((beta_1 * x + beta_0) - y)^2
+    return(sum(cost))
+}
+```
+
+```{r c) Calculates betas for SLR by gradient descent}
+# Calculates the slope and intercept values for SLR
+# or simple linear regression.
+# @param x - a vector of the explanatory variable.
+# @param y - a vector of the response variable.
+# @param alpha - the learning rate.
+# @return betas - a vector containing the calculated betas.
+slr_gradient_desc <- function(x, y, alpha){
+
+    # Summary statistic calculations.
+    # Helps to calculate the gradient faster.
+    x_bar <- mean(x)
+    y_bar <- mean(y)
+    xy_bar <- mean(x*y)
+    x_sqbar <- mean(x^2)
+
+    # initial guess for beta_0 and beta_1.
+    beta_0 <- y_bar
+    beta_1 <- 0
+
+    # A counter to determine is the error is unchanging.
+    # This is the Loop-Control-Variable (LCV).
+    count_same <- 0
+
+    # Iterate 100 times or until the cost remains unchanged for 10 iterations.
+    for(i in 1:1000){
+
+        # Stop the loop if the LCV >= 10.
+        if(count_same >= 10){
+            break
+        }
+
+        # Cost prior to beta adjustment.
+        cost_start <- slr_mse(x, y, beta_0, beta_1)
+
+        # Calculate gradient values.
+        g_0 <- beta_0 + (beta_1 * x_bar) - y_bar
+        g_1 <- (beta_0 * x_bar) + (beta_1 * x_sqbar) - xy_bar
+
+        # Update betas.
+        beta_0 <- beta_0 - (alpha * g_0)
+        beta_1 <- beta_1 - (alpha * g_1)
+
+        # If the cost is unchanged add 1 to the LCV.
+        if(cost_start == slr_mse(x, y, beta_0, beta_1)){
+            count_same <- count_same + 1
+        }
+    }
+
+    return(c(beta_0 = round(beta_0, 4),
+             beta_1 = round(beta_1, 4),
+             iterations = i))
+}
+```
+
+```{r Initial function test}
+slr_gradient_desc(x, y, alpha = 0.1)
+```
+
+```{r, include = F}
 ols_cost <- function(x, y, beta_0, beta_1){
     cost <- (y - (beta_1 * x + beta_0))^2
     return(sum(cost))
 }
 ```
 
-```{r}
+```{r, include = F}
+# Calculates the slope and intercept values for SLR
+# or simple linear regression.
+# @param x - a vector of the explanatory variable.
+# @param y - a vector of the response variable.
+# @return
 slr_gradient_desc <- function(x, y, alpha){
 
     # Summary statistic calculations.
@@ -137,10 +220,6 @@ slr_gradient_desc <- function(x, y, alpha){
         # Cost prior to beta adjustment.
         cost_start <- ols_cost(x, y, beta_0, beta_1)
 
-        #print(cost_start)
-
-        #print(c(beta_0, beta_1))
-
         # Calculate gradient values.
         g_0 <- beta_0 + (beta_1 * x_bar) - y_bar
         g_1 <- (beta_0 * x_bar) + (beta_1 * x_sqbar) - xy_bar
@@ -152,13 +231,7 @@ slr_gradient_desc <- function(x, y, alpha){
         # Calculate new cost.
         cost_after <- ols_cost(x, y, beta_0, beta_1)
 
-        #print(cost_after)
-
-        #print(c(beta_0, beta_1))
-
         # Check cost relation.
-        #if(cost_start < cost_after) {
-            #return("Bad alpha, over shot minimum! Lower alpha and try again")
         if(cost_start == cost_after) {
             df_results <- rbind(df_results,
                                 c(beta_0, beta_1, cost_after))
@@ -168,13 +241,9 @@ slr_gradient_desc <- function(x, y, alpha){
                                 c(beta_0, beta_1, cost_after))
         }
     }
+
     return(df_results)
 }
-```
-
-## Test
-```{r}
-test_1 <- slr_gradient_desc(x, y, alpha = 0.01)
 ```
 
 ```{r, include = F}
@@ -203,7 +272,7 @@ test_1 <- slr_gradient_desc(x, y, alpha = 0.01)
 #}
 ```
 
-```{r}
+```{r, include = F}
 # gradient testing
 
 # Summary statistic calculations.
@@ -226,7 +295,7 @@ plot(beta_1s, g_1)
 abline(h = 0, v = 5)
 ```
 
-```{r}
+```{r, include = F}
 costs <- c()
 
 for(i in seq(from = 1, to = length(beta_0s))){
