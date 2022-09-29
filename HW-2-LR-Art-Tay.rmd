@@ -180,10 +180,216 @@ slr_gradient_desc(x, y, alpha = 0.1)
 ```
 
 ## Linear Model on Airbnb Data
+```{r}
+# Libraries
+library(tidyverse)
+library(tidymodels)
+```
+
 ```{r notes on model building, include = F}
 # Skewness in the predictors does matter as long as the residuals are
 # normally distributed. This usually only concerns y; however,
 # skewness in x can lead to influential points.
 ```
 
-## Data Cleaning
+### Modeling Bulding
+```{r Data import}
+# Import raw data.
+data_raw <- read.csv(file = "AB_NYC_2019.csv", stringsAsFactors = T,
+                     header = T)
+```
+
+```{r Train/Test Split}
+# 70/30 train/test data split
+# Data was split prior to cleaning to prevent data leakage.
+set.seed(123)
+data_split <- initial_split(data_raw, prop = 0.7)
+
+train_data <- training(data_split)
+test_data <- testing(data_split)
+```
+
+```{r Initialize a recipe variable}
+# Define a cleaning recipe from the data.
+# Assigns price the role of response.
+# Recipe is used to create a pipline that can works with new raw data
+# assuming that the format matches the training data.
+cleaning_recipe <- recipe(price ~ ., data = train_data)
+```
+
+```{r Add remove id variable step to recipe}
+cleaning_recipe <- cleaning_recipe %>% step_rm(id, host_id, name, host_name)
+```
+
+```{r Add recode missing values to recipe}
+cleaning_recipe <- cleaning_recipe %>%
+    step_mutate(
+        # numeric recodes
+        latitude = ifelse(latitude == 0, NA, latitude),
+        longitude = ifelse(longitude == 0, NA, longitude),
+        minimum_nights = ifelse(minimum_nights == 0, NA, minimum_nights),
+
+        #Factor recodes
+        # It was done using replace to maintain factor coding
+        room_type = replace(room_type,
+            room_type == "" | room_type == " ", NA),
+        neighbourhood_group = replace(neighbourhood_group,
+            neighbourhood_group == "" | neighbourhood_group == " ",  NA),
+        neighbourhood = replace(neighbourhood,
+            neighbourhood == "" | neighbourhood == " ", NA),
+        last_review = replace(last_review,
+            last_review == "" | room_type == " ", NA)
+    )
+```
+
+```{r Recode the response separately}
+# Skip = T tell the fit to ignore the step if it can't be done.
+# Necessary because we assume the test_data does not have the response.
+cleaning_recipe <- cleaning_recipe %>%
+                   step_mutate(price = ifelse(price == 0, NA, price), skip = T)
+```
+```{r Feature Engineering}
+# Geodist (?)
+cleaning_recipe <- cleaning_recipe %>%
+    step_mutate(
+
+            # Change NA reviews per month to be 0.
+            reviews_per_month = ifelse(is.na(reviews_per_month),
+                0, reviews_per_month),
+
+            # Create a new variable last_review_year to reduce dimensionality.
+            last_review_year = substring(last_review, 1, 4),
+
+            # Modify NA last_review to be a new level "none".
+            last_review_year = replace(last_review_year,
+            is.na(last_review_year), "none"),
+
+            # Cast to be factor.
+            last_review_year = as.factor(last_review_year),
+
+            # Remove old last review variable
+            last_review = NULL
+    )
+```
+
+```{r Check Skewness}
+plot_skew <- train_data %>%
+             select(where(is.numeric)) %>%
+             select(-c(id, host_id)) %>%
+             pivot_longer(cols = everything()) %>%
+             ggplot(aes(value)) +
+             geom_histogram() +
+             facet_wrap(~name, scales = "free_x") +
+             theme_bw() +
+             labs(x = "", y = "Frequency")
+```
+
+```{r Add log transform and YeoJohnson to recipe}
+cleaning_recipe <- cleaning_recipe %>%
+                   step_YeoJohnson(all_numeric_predictors()) %>%
+                   # price was logged instead of YeoJohnson to maintain
+                   # reversibility and interpretability.
+                   step_log(price, skip = T)
+```
+
+```{r Add Normalize, Dummy Variables, and Imputation to recipe}
+cleaning_recipe <- cleaning_recipe %>%
+                   step_normalize(all_numeric_predictors()) %>%
+                   step_dummy(all_nominal_predictors()) %>%
+                   step_impute_knn(everything(), neighbors = 10,
+                                   impute_with = imp_vars(everything()),
+                                   skip = T)
+```
+
+```{r Add filter out NZV and High CORR to recipe}
+cleaning_recipe <- cleaning_recipe %>%
+                   # removes predictor with less than 10% unique values and
+                   # a greater than 95/5 ratio of most prevalent to next most
+                   step_nzv(all_predictors()) %>%
+                   step_corr(all_numeric_predictors())
+```
+
+```{r Bake at substage to check linearity assumption}
+cleaning_recipe <- cleaning_recipe %>% prep(retain = T, verbose = T)
+train_scatter <- bake(cleaning_recipe, new_data = train_data)
+```
+
+```{r Check Linearity}
+# Matrix Scatterplot
+plot_scatter <- train_scatter %>%
+                select(-starts_with(c("neighbourhood",
+                                      "room_type", "last_review"))) %>%
+                pivot_longer(cols = -price) %>%
+                ggplot(aes(x = value, y = price)) +
+                geom_point() +
+                facet_wrap(~name, scales = "free_x") +
+                theme_bw() +
+                labs(x = "", y = "ln(Price)")
+
+plot_scatter
+```
+
+```{r Convert numerics into natural cubic splines}
+cleaning_recipe <- cleaning_recipe %>%
+                   # makes sure not to accidentally spline your response variable
+                   step_ns(-starts_with(c("neighbourhood",
+                                "room_type", "last_review", "price")),
+                           deg_free = 3) %>%
+                   # called again to remove overdetermined splines
+                   step_corr(all_numeric_predictors())
+```
+
+```{r Summary of MLR Model Build}
+mlr_mod <- linear_reg() %>% set_engine("lm")
+
+mlr_wflow <- workflow() %>%
+             add_model(mlr_mod) %>%
+             add_recipe(cleaning_recipe)
+
+mlr_wflow
+```
+
+```{r Summary of MLR Fit}
+mlr_fit <- mlr_wflow %>%
+           fit(data = train_data)
+
+#mlr_fit %>% extract_fit_parsnip() %>% tidy() %>% print(n = 35)
+
+mlr_fit_lm <- mlr_fit %>% extract_fit_engine()
+
+par(mfrow = c(2,2))
+plot(mlr_fit_lm)
+```
+
+```{r Make Test set predictions from MLR}
+# Make predictions from MLR
+mlr_pred <- predict(mlr_fit, test_data)
+```
+
+```{r Back transform the prediction}
+# Group prediction results raw v. training error v. testing error.
+# metric r = Predicted / Actually
+# Looking for the mean closest to 1 with the smallest spread.
+
+
+```
+
+```{r Train and Test RMSE of MLR Model}
+
+```
+
+```{r Fit Penalized Regression}
+
+```
+
+```{r Train and Test RMSE of PLR Model}
+
+```
+
+```{r Fit Hierarchy Penalized Regression}
+
+```
+
+```{r Train and Test RMSE of HPLR}
+
+```
