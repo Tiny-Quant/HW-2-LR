@@ -184,6 +184,7 @@ slr_gradient_desc(x, y, alpha = 0.1)
 # Libraries
 library(tidyverse)
 library(tidymodels)
+tidymodels_prefer()
 ```
 
 ```{r notes on model building, include = F}
@@ -311,7 +312,7 @@ cleaning_recipe <- cleaning_recipe %>%
 
 ```{r Bake at substage to check linearity assumption}
 cleaning_recipe <- cleaning_recipe %>% prep(retain = T, verbose = T)
-train_scatter <- bake(cleaning_recipe, new_data = train_data)
+train_scatter <- bake(cleaning_recipe, new_data = NULL)
 ```
 
 ```{r Check Linearity}
@@ -353,43 +354,118 @@ mlr_wflow
 mlr_fit <- mlr_wflow %>%
            fit(data = train_data)
 
-#mlr_fit %>% extract_fit_parsnip() %>% tidy() %>% print(n = 35)
-
 mlr_fit_lm <- mlr_fit %>% extract_fit_engine()
 
-par(mfrow = c(2,2))
-plot(mlr_fit_lm)
+summary(mlr_fit_lm)
+
+par(mfrow = c(1,2))
+plot(mlr_fit_lm, which = 1:2)
 ```
 
-```{r Make Test set predictions from MLR}
-# Make predictions from MLR
-mlr_pred <- predict(mlr_fit, test_data)
+```{r Check Influential Points}
+library(MASS)
+library(ggpubr)
+
+##Influential Point Analysis ##
+
+##Calculate Leverage, Studentized Residuals, and Cook's Distance.
+Id <- 1:length(train_data$id)
+Leverage <- hatvalues(mlr_fit_lm)
+StudRes <- studres(mlr_fit_lm)
+CookD <- cooks.distance(mlr_fit_lm)
+
+inful_data <- cbind(Id, Leverage, StudRes, CookD)
+inful_data <- as.data.frame(inful_data)
+
+##Plots
+##Leverage
+lev <- ggplot(data = inful_data, aes(x = Id, y = Leverage)) + geom_point() +
+            geom_hline(yintercept = 2 * length(mlr_fit_lm$coefficients) /
+                length(inful_data$Id), col = "red") +
+            labs(x = "Index") +
+            theme_bw()
+
+##Studentized Residuals
+studres <- ggplot(data = inful_data, aes(x = Id, y = StudRes)) + geom_point() +
+                geom_hline(yintercept = 2, col = "red") +
+                geom_hline(yintercept = -2, col = "red") +
+                labs(y = "Studentized Residuals", x = "Index") +
+                theme_bw()
+
+##Cooks distance
+cooks <- ggplot(data = inful_data, aes(x = Id, y = CookD)) + geom_point() +
+             geom_hline(yintercept = 1, col = "red") +
+             labs(y = "Cook's Distance", x = "Index") +
+             theme_bw()
+
+inful <- ggarrange(lev, studres, cooks, ncol = 3, nrow = 1)
+
+annotate_figure(inful, top = text_grob("Influential Point Analysis"))
+
 ```
+
 
 ```{r Back transform the prediction}
 # Group prediction results raw v. training error v. testing error.
 # metric r = Predicted / Actually
 # Looking for the mean closest to 1 with the smallest spread.
 
+# Extract transformed pricing variables
+train_baked <- bake(prep(cleaning_recipe), new_data = NULL)
 
+# Fresh = T tell the recipe to apply all the steps again
+# training = test_data tell the recipe to treat the test_data
+# as if it was the training data used in the preprocessing step
+# this avoids the modeling problem of steps having to be skipped
+# when the response is absent from the dataset.
+test_baked <- bake(
+    prep(cleaning_recipe, fresh = T, training = test_data, retain = T),
+    new_data = NULL)
+
+train_price <- train_baked %>% select(price)
+test_price <- test_baked %>% select(price)
+train_pred <- predict(mlr_fit, new_data = train_data)
+test_pred <- predict(mlr_fit, new_data = test_data)
+
+training_results <- cbind(train_price, train_pred)
+testing_results <- cbind(test_price, test_pred)
+
+training_results <- training_results %>%
+                    mutate(ratio = price / .pred)
+
+testing_results <- testing_results %>%
+                    mutate(ratio = price / .pred)
 ```
 
-```{r Train and Test RMSE of MLR Model}
+```{r Model evaluation metrics}
+train_rss <- sum((training_results$price - training_results$.pred)^2)
+test_rss <- sum((testing_results$price - testing_results$.pred)^2)
 
+train_n <- nrow(training_results)
+test_n <- nrow(testing_results)
+model_p <- length(coef(mlr_fit_lm)) - 1 #subtract 1 to ignore the intercept
+
+train_tss <- var(training_results$price) * train_n
+test_tss <- var(testing_results$price) * test_n
+
+train_rsq <- 1 - (train_rss / train_tss)
+test_rsq <- 1 - (test_rss / test_tss)
+
+train_adj_rsq <- 1 - (1 - train_rsq) * (train_n - 1) /
+                 (train_n - model_p - 1)
+test_adj_rsq <- 1 - (1 - test_rsq) * (test_n - 1) /
+                 (test_n - model_p - 1)
+
+hist(training_results$ratio)
+hist(testing_results$ratio)
+
+train_ratio_mean <- mean(training_results$ratio)
+train_ratio_sd <- sd(training_results$ratio)
+test_ratio_mean <- mean(testing_results$ratio)
+test_ratio_sd <- sd(testing_results$ratio)
 ```
 
-```{r Fit Penalized Regression}
-
-```
-
-```{r Train and Test RMSE of PLR Model}
-
-```
-
-```{r Fit Hierarchy Penalized Regression}
-
-```
-
-```{r Train and Test RMSE of HPLR}
-
+```{r Variable importance}
+library(vip)
+mlr_fit %>% extract_fit_parsnip %>% vip()
 ```
