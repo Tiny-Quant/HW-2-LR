@@ -2,15 +2,21 @@
 title: "Linear Regression"
 author: "Art Tay"
 output: pdf_document
+header-includes:
+    - \usepackage{caption}
 ---
 
 ```{r setup, include=FALSE}
 ##Setup code
 knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+knitr::opts_knit$set(eval.after = "fig.cap")
 
 # Libraries
 library(tidyverse)
 ```
+
+\captionsetup[table]{labelformat = empty}
+\captionsetup[figure]{labelfont = bf}
 
 ## Gradient Derivation
 a)
@@ -179,8 +185,161 @@ slr_gradient_desc <- function(x, y, alpha){
 slr_gradient_desc(x, y, alpha = 0.1)
 ```
 
+\pagebreak
+
 ## Linear Model on Airbnb Data
-```{r}
+### Introduction
+Airbnb, Inc. is a software company that operates a marketplace for people to
+rent their properties on an ad hoc basis
+[(\textcolor{blue}{Wikipedia})](https://en.wikipedia.org/wiki/Airbnb).
+The specific dataset addressed in this report comes from Inside Airbnb,
+"a mission driven project that provides data \dots about Airbnb's
+impact on residential communities."
+[(\textcolor{blue}{Website})](http://insideairbnb.com/about/).
+The data set contains 12 predictive variables: 4 categorical and
+8 numeric. All of the roughly 40,000 listings in this particular
+dataset were located in New York City (Tay, 2022).
+
+The ultimate goal of this analysis was to develope the most predictive
+linear model of a particular listings price.
+
+### Methodology
+The data was initial split into training and testing data (70% and 30% of the raw
+data respectively). The Training data was analyzed and cleaned separately to
+avoid data leakage that might bias the test error rate. The ID variables were
+removed as predictor and the factor variables were check for empty strings.
+All empty strings in factor variables were recoded as `NA` as were any `0` values
+in `price`, `minimum_nights`, `longitude`, and `latitude`. `NA` values for the
+review type variables were all associated with properties that had never been
+reviewed, so `NA` values in `reviews_per_month` were assigned 0. Furthermore,
+the year was extracted from `last_review` and a level of `none` was added for
+any empty cells. This was put into a new feature and called `last_review_year`.
+
+Linear models are very sensitive to non-normality in the response variable.
+While there are no explicit parametric assumptions about the distributions of
+the predictor, skewness can increase model error.
+```{r skewness plot, echo = F, fig.cap = caption}
+#| fig.align = "center",
+#| out.height = '90%',
+#| out.width = '90%'
+load(file = "Figures/plot_skew.rds")
+
+plot_skew
+
+caption <- "Histogram of raw numeric features before any transformations.
+    Most distribution are clearly right skewed"
+```
+
+Therefore, the response variable, `price`, was log transformed, and all other
+numeric predictors were transformed via the Yeos-Johnson transformation.
+Furthermore all numeric predictor were centered and scaled. Centering can
+address issues related to multicollinearity and scaling is a requirement of
+most imputation algorithms. All nominal predictor were transformed into $n-1$
+dummy variables and 11 missing price values were imputed using k-nearest-neighbors
+with $k = 10$. Afterwards, near-zero-variance and highly correlated predictors
+were dropped from the pool. Given the large sample size this step was not strictly
+necessary; however, it can address overfitting and multicollinearity.
+
+Another important assumption of linear regression is a linear relationship
+between all predictors and y.
+```{r linearity plot, echo = F, fig.cap = caption}
+#| fig.align = 'center',
+#| out.height = '100%',
+#| out.width = '100%'
+
+load(file = "Figures/plot_scatter.rds")
+
+plot_scatter
+
+caption <- "Scatter plot of transformed numeric predictors against log(price).
+Note that the x-axis is center and scaled relative to the predictor."
+```
+None of the predictors share a strong linear relationship with price; however,
+there are methods for including nonlinear relationship into a linear regression
+model. Frank Harrell in his book \emph{Regression Modeling Strategies},
+recommends treating all numeric predictors are natural cubic splines to capture
+non-linear relationships. Natural cubic splines are piecewise third degree
+piecewise polynomial transformations of predictors with added smoothness restrictions.
+Than can be past to the linear model via 3\* basis functions per variable
+(marked by _ns\#). \* Not all variables produced 3 uncorrelated basis functions.
+High correlated predictors were dropped again after the spline transformation which
+left some predictors defined by 2 basis functions. The non-linear effect is
+still captured.
+
+\pagebreak
+
+### Results
+The final model had 32 $\beta$s with almost all of them being statistically
+significant.
+```{r diagnosis plot, echo = F, fig.cap = caption}
+#| fig.align = 'center',
+#| out.height = '60%',
+#| out.width = '60%'
+
+load(file = "Figures/mlr_fit_lm.rds")
+
+par(mfrow = c(1,2))
+
+plot(mlr_fit_lm, which = 1:2)
+
+caption <- "Diagnostic plots from the fit multiple linear regression model.
+The assumptions of homoscedasticity and normality are clearly violated"
+```
+
+```{r outlier plots, echo = F, fig.cap = caption}
+#| fig.align = 'center',
+#| out.height = '60%',
+#| out.width = '60%'
+
+load(file = "Figures/inful.rds")
+
+inful
+
+caption <- "Analysis of potential outliers from the MLR model fit.
+Although there are some high leverage points, none of them are extremely
+influential in the model base on Cook's distance. Removing points is unlikely
+to improve the model fit."
+```
+
+Unfortunately, because the model assumption are not met, no statistical inference
+can be draw from the model; however, the prediction may still be accurate.
+
+\pagebreak
+
+### Conclusions
+```{r metric table, echo = F, fig.cap = NULL}
+#| fig.align = 'center'
+
+load(file = "Figures/metric_table.rds")
+
+metric_table
+```
+
+```{r variable importance plot, echo = F, fig.cap = caption}
+#| fig.align = 'center'
+
+load(file = "Figures/vip_plot.rds")
+
+vip_plot
+
+caption <- "Top predictor variables by importance."
+```
+
+Based on adjusted $R^2$, the linear model explains roughly 50% of the variation
+in price for both the training and testing data. There is no significant drop
+in model metrics on the test data, which indicates that the model is not
+over fit. The ratio metrics indicate that the majority of predictions are
+within $\pm10\%$ of the true price with almost all predictions within $\pm20\%$.
+Given the extreme non-linearity of the data and the unequal variance of the
+residuals, the model prediction are usable. Additional predictive power
+may be achieved by transitioning to a tree based model; however, the data
+appears not to explain the vast majority of the variation in prices across
+listings.
+
+\pagebreak
+
+## Code for Linear Model
+```{r modeling libraries}
 # Libraries
 library(tidyverse)
 library(tidymodels)
@@ -193,7 +352,7 @@ tidymodels_prefer()
 # skewness in x can lead to influential points.
 ```
 
-### Modeling Bulding
+### Modeling Building
 ```{r Data import}
 # Import raw data.
 data_raw <- read.csv(file = "AB_NYC_2019.csv", stringsAsFactors = T,
@@ -283,6 +442,10 @@ plot_skew <- train_data %>%
              facet_wrap(~name, scales = "free_x") +
              theme_bw() +
              labs(x = "", y = "Frequency")
+
+plot_skew
+
+save(plot_skew, file = "Figures/plot_skew.rds")
 ```
 
 ```{r Add log transform and YeoJohnson to recipe}
@@ -310,7 +473,7 @@ cleaning_recipe <- cleaning_recipe %>%
                    step_corr(all_numeric_predictors())
 ```
 
-```{r Bake at substage to check linearity assumption}
+```{r Bake at substage to check linearity assumption, cache = T}
 cleaning_recipe <- cleaning_recipe %>% prep(retain = T, verbose = T)
 train_scatter <- bake(cleaning_recipe, new_data = NULL)
 ```
@@ -328,6 +491,8 @@ plot_scatter <- train_scatter %>%
                 labs(x = "", y = "ln(Price)")
 
 plot_scatter
+
+save(plot_scatter, file = "Figures/plot_scatter.rds")
 ```
 
 ```{r Convert numerics into natural cubic splines}
@@ -360,6 +525,8 @@ summary(mlr_fit_lm)
 
 par(mfrow = c(1,2))
 plot(mlr_fit_lm, which = 1:2)
+
+save(mlr_fit_lm, file = "Figures/mlr_fit_lm.rds")
 ```
 
 ```{r Check Influential Points}
@@ -400,12 +567,15 @@ cooks <- ggplot(data = inful_data, aes(x = Id, y = CookD)) + geom_point() +
 
 inful <- ggarrange(lev, studres, cooks, ncol = 3, nrow = 1)
 
-annotate_figure(inful, top = text_grob("Influential Point Analysis"))
+inful <- annotate_figure(inful, top = text_grob("Influential Point Analysis"))
 
+inful
+
+save(inful, file = "Figures/inful.rds")
 ```
 
 
-```{r Back transform the prediction}
+```{r Back transform the prediction, cache = T}
 # Group prediction results raw v. training error v. testing error.
 # metric r = Predicted / Actually
 # Looking for the mean closest to 1 with the smallest spread.
@@ -465,7 +635,34 @@ test_ratio_mean <- mean(testing_results$ratio)
 test_ratio_sd <- sd(testing_results$ratio)
 ```
 
-```{r Variable importance}
+```{r model metric table}
+#model metric table
+library(kableExtra)
+metric_table <- data.frame(train = c(train_adj_rsq, train_ratio_mean,
+                                     train_ratio_sd),
+                           test = c(test_adj_rsq, test_ratio_mean,
+                                    test_ratio_sd))
+
+colnames(metric_table) <- c("Training Data", "Testing Data")
+rownames(metric_table) <- c("Adjusted $R^2$", "Ratio - Mean",
+                            "Ratio - Standard Deviation")
+
+caption <- "\\textbf{Table 1: }Training and Testing Model Fit Metrics"
+
+metric_table <- metric_table %>% kbl(format = "latex", booktabs = T,
+    longtable = T, escape = F, digits = 3, caption = caption) %>%
+    kable_styling(full_width = F)
+
+save(metric_table, file = "Figures/metric_table.rds")
+```
+
+```{r Variable importance, cache = T}
 library(vip)
-mlr_fit %>% extract_fit_parsnip %>% vip()
+vip_plot  <- mlr_fit %>%
+             extract_fit_parsnip %>%
+             vip() + theme_bw()
+
+vip_plot
+
+save(vip_plot, file = "Figures/vip_plot.rds")
 ```
