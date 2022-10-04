@@ -27,9 +27,9 @@ a)
 (\beta_0 + \beta_1 x^{(i)} - y^{(i)})^2
 \right]
 &=
+\frac{1}{2m} \sum_{i = 0}^{m}
 \dfrac{\partial}{\partial \beta_0}
 \left[
-\frac{1}{2m} \sum_{i = 0}^{m}
 (\beta_0 + \beta_1 x^{(i)} - y^{(i)})^2
 \right]
 \\
@@ -150,7 +150,7 @@ slr_gradient_desc <- function(x, y, alpha){
     # This is the Loop-Control-Variable (LCV).
     count_same <- 0
 
-    # Iterate 100 times or until the cost remains unchanged for 10 iterations.
+    # Iterate 1000 times or until the cost remains unchanged for 10 iterations.
     for(i in 1:1000){
 
         # Stop the loop if the LCV >= 10.
@@ -201,7 +201,7 @@ The data set contains 12 predictive variables: 4 categorical and
 dataset were located in New York City (Tay, 2022).
 
 The ultimate goal of this analysis was to develope the most predictive
-linear model of a particular listings price.
+linear model of a particular listing's price.
 
 ### Methodology
 The data was initial split into training and testing data (70% and 30% of the raw
@@ -226,7 +226,7 @@ load(file = "Figures/plot_skew.rds")
 
 plot_skew
 
-caption <- "Histogram of raw numeric features before any transformations.
+caption <- "Histograms of raw numeric features before any transformations.
     Most distribution are clearly right skewed"
 ```
 
@@ -234,7 +234,7 @@ Therefore, the response variable, `price`, was log transformed, and all other
 numeric predictors were transformed via the Yeos-Johnson transformation.
 Furthermore all numeric predictor were centered and scaled. Centering can
 address issues related to multicollinearity and scaling is a requirement of
-most imputation algorithms. All nominal predictor were transformed into $n-1$
+most imputation algorithms. All nominal predictors were transformed into $n-1$
 dummy variables and 11 missing price values were imputed using k-nearest-neighbors
 with $k = 10$. Afterwards, near-zero-variance and highly correlated predictors
 were dropped from the pool. Given the large sample size this step was not strictly
@@ -255,13 +255,15 @@ caption <- "Scatter plot of transformed numeric predictors against log(price).
 Note that the x-axis is center and scaled relative to the predictor."
 ```
 None of the predictors share a strong linear relationship with price; however,
-there are methods for including nonlinear relationship into a linear regression
+there are methods for including nonlinear relationships into a linear regression
 model. Frank Harrell in his book \emph{Regression Modeling Strategies},
-recommends treating all numeric predictors are natural cubic splines to capture
-non-linear relationships. Natural cubic splines are piecewise third degree
-piecewise polynomial transformations of predictors with added smoothness restrictions.
-Than can be past to the linear model via 3\* basis functions per variable
-(marked by _ns\#). \* Not all variables produced 3 uncorrelated basis functions.
+recommends treating all numeric predictors are natural cubic splines.
+Natural cubic splines are piecewise third degree
+polynomial transformations of predictors with added smoothness restrictions.
+They can then be pasted to the linear model via 3\* basis functions per variable
+(marked by _ns\#).
+
+\* Not all variables produced 3 uncorrelated basis functions.
 High correlated predictors were dropped again after the spline transformation which
 left some predictors defined by 2 basis functions. The non-linear effect is
 still captured.
@@ -297,7 +299,7 @@ inful
 
 caption <- "Analysis of potential outliers from the MLR model fit.
 Although there are some high leverage points, none of them are extremely
-influential in the model base on Cook's distance. Removing points is unlikely
+influential to the model based on Cook's distance. Removing points is unlikely
 to improve the model fit."
 ```
 
@@ -326,11 +328,11 @@ caption <- "Top predictor variables by importance."
 ```
 
 Based on adjusted $R^2$, the linear model explains roughly 50% of the variation
-in price for both the training and testing data. There is no significant drop
+in price for both the training and testing data. There are no significant drops
 in model metrics on the test data, which indicates that the model is not
 over fit. The ratio metrics indicate that the majority of predictions are
 within $\pm10\%$ of the true price with almost all predictions within $\pm20\%$.
-Given the extreme non-linearity of the data and the unequal variance of the
+Despite the extreme non-linearity of the data and the unequal variance of the
 residuals, the model prediction are usable. Additional predictive power
 may be achieved by transitioning to a tree based model; however, the data
 appears not to explain the vast majority of the variation in prices across
