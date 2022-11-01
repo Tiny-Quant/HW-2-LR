@@ -10,6 +10,8 @@ header-includes:
 ##Setup code
 knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 knitr::opts_knit$set(eval.after = "fig.cap")
+# Flattens plot to be images
+knitr::opts_chunk$set(dev = "png", dpi = 100)
 
 # Libraries
 library(tidyverse)
